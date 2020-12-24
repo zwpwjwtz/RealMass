@@ -4,16 +4,8 @@
 
 library('MALDIquant')
 library('alsace')
+source('./MSFileIO.R')
 source('./DataFilter.R')
-
-
-# Helper function for reading TXT format spectrum
-readTxtSpectrum <- function(fileName, fieldSeparator = ' ')
-{
-    mzSpectrum <- read.csv(fileName, sep = fieldSeparator, header = FALSE)
-    colnames(mzSpectrum) <- c('m/z', 'Intensity')
-    return(mzSpectrum)
-}
 
 
 # Function for pre-processing 1-D mass spectrum

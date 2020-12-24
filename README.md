@@ -11,3 +11,4 @@ No guarantee for data safety. Back up your data before using!
 ## Supported file format of mass spectra
 
 - TXT (CSV)
+- mzXML
