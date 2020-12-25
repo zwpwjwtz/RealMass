@@ -109,3 +109,19 @@ updateMZXMLSpectrum <- function(mzSpectrum, fileName)
                          							  oldHeader),
                          outformat = 'mzXML')
 }
+
+# Read spectrum file by guessing its format
+readSpectrum <- function(fileName)
+{
+	# Guess file type by suffix
+	if (endsWith(tolower(fileName), '.txt'))
+		return(readTxtSpectrum(fileName))
+	else if (endsWith(tolower(fileName), '.csv'))
+		return(readTxtSpectrum(fileName, fieldSeparator = ','))
+	else if (endsWith(tolower(fileName), '.mzxml'))
+		return(readMZXMLSpectrum(fileName))
+	else if (endsWith(tolower(fileName), '.rds'))
+		return(readRDS(fileName))
+	else
+		return(readTxtSpectrum(fileName))
+}

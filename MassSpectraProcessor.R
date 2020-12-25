@@ -32,7 +32,7 @@ processMassSpectra <- function(sourceFiles,
     mzIndexes <- c()
     for (source in sourceFiles)
     {
-        mzFile <- readTxtSpectrum(source)
+        mzFile <- readSpectrum(source)
         
         # Select m/z with the given ranges
         if (length(mzRanges) > 0)
@@ -55,7 +55,7 @@ processMassSpectra <- function(sourceFiles,
     {
         for (background in backgroundFiles)
         {
-            bgFile <- readTxtSpectrum(background)
+            bgFile <- readSpectrum(background)
             if (length(mzRanges) > 0)
                 bgFile <- bgFile[rangeFilter.index(bgFile[,1], mzRanges),]
             if (nrow(bgFile) != length(mzSpectra[[1]]@mass))
