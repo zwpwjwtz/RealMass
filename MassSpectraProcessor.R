@@ -24,6 +24,7 @@ processMassSpectra <- function(sourceFiles,
                                backgroundFiles = c(),
                                mzRanges = list(),
                                refPeakList = c(),
+                               refTolerance = 1E-3,
                                smoothing = TRUE,
                                baseline = TRUE)
 {
@@ -36,15 +37,8 @@ processMassSpectra <- function(sourceFiles,
         
         # Select m/z with the given ranges
         if (length(mzRanges) > 0)
-        {
-            if (length(mzIndexes) < 1)
-            {
-                # Calculate m/z indexes only for the first iteration
-                # Assuming all source spectra have the same m/z!
-                mzIndexes <- rangeFilter.index(mzFile[,1], mzRanges)
-            }
-            mzFile <- mzFile[mzIndexes,]
-        }
+            mzFile <- mzFile[rangeFilter.index(mzFile[,1], mzRanges),]
+        
         mzSpectra <- c(mzSpectra,
                        list(createMassSpectrum(mzFile[,1], mzFile[,2])))
     }
@@ -111,6 +105,7 @@ processMassSpectra <- function(sourceFiles,
         # Align source spectra
         mzWarpFunction <- determineWarpingFunctions(mzPeaks,
                                                     reference = refPeaks,
+        											tolerance = refTolerance,
                                                     allowNoMatches = TRUE)
         suppressWarnings(
             mzSpectra <- warpMassSpectra(mzSpectra, mzWarpFunction)
@@ -122,6 +117,7 @@ processMassSpectra <- function(sourceFiles,
             bgPeaks <- detectPeaks(bgSpectra, SNR = 6)
             bgWarpFunction <- determineWarpingFunctions(bgPeaks,
                                                         reference = refPeaks,
+            											tolerance = refTolerance,
                                                         allowNoMatches = TRUE)
             suppressWarnings(
                 bgSpectra <- warpMassSpectra(bgSpectra, bgWarpFunction)
