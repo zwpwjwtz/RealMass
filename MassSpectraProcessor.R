@@ -5,6 +5,7 @@
 library('MALDIquant')
 library('alsace')
 source('./MSFileIO.R')
+source('./MSUtils.R')
 source('./DataFilter.R')
 
 
@@ -178,12 +179,13 @@ pickPeaks <- function(sourceFiles,
         
         # Fit found peaks and get relative peak information
         # Only peaks within the given m/z range are choosen
-        # Assuming the interval in the m/z list is equal !!!
         if (length(mzRanges) > 0)
+        {
             mzIndexes <- rangeFilter.index(mzPeaks@mass, mzRanges)
-        else
-            mzIndexes <- seq(1, length(mzPeaks@mass))
-        mzIndexes <- match(mzPeaks@mass[mzIndexes], mzSpectrum@mass)
+            mzIndexes <- which(selectUniqueMZ(mzSpectrum@mass, 
+                                              mzPeaks@mass[mzIndexes]))
+        } else
+            mzIndexes <- seq(1, length(mzSpectrum@mass))
         mzPeakInfo <- fitpeaks(mzSpectrum@intensity, mzIndexes)
         
         # Eliminating peaks whose SNR is smaller than given threshold
@@ -325,11 +327,12 @@ plotSpectra <- function(spectraFileNames,
             # Filter peaks with given SNR
             if (peakSNR > 0)
             {
-                mzIndex <- match(peakList@mass, massList)
                 mzNoiseLevel <- estimateNoise(
-                                    createMassSpectrum(massList, intensityList))
+                                    createMassSpectrum(massList, intensityList), 
+                                    method = 'SuperSmoother')
+                mzMasks <- selectUniqueMZ(massList, peakList@mass)
                 peakFilter <- peakList@intensity > 
-                                    mzNoiseLevel[mzIndex, 2] * peakSNR
+                                    mzNoiseLevel[mzMasks, 2] * peakSNR
                 peakFilter[is.na(peakFilter)] <- FALSE
                 peakList <- createMassPeaks(peakFile[peakFilter, 1], 
                                             peakFile[peakFilter, 4])
@@ -353,7 +356,7 @@ plotSpectra <- function(spectraFileNames,
              xlab = expression(italic('m/z')),
              ylab = 'Intensity')
         axis(1, at = seq(plotMZMin, plotMZMax, mzTick))
-        if (!is.null(peakList))
+        if (!is.null(peakList) && length(peakList@mass) > 0)
             labelPeaks(peakList, cex = labelSize)
         title(titles[i])
         if (saveToFile)
