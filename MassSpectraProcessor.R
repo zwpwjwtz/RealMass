@@ -180,12 +180,11 @@ pickPeaks <- function(sourceFiles,
         # Fit found peaks and get relative peak information
         # Only peaks within the given m/z range are choosen
         if (length(mzRanges) > 0)
-        {
             mzIndexes <- rangeFilter.index(mzPeaks@mass, mzRanges)
-            mzIndexes <- which(selectUniqueMZ(mzSpectrum@mass, 
-                                              mzPeaks@mass[mzIndexes]))
-        } else
-            mzIndexes <- seq(1, length(mzSpectrum@mass))
+        else
+            mzIndexes <- seq(1, length(mzPeaks@mass))
+        mzIndexes <- mapUniqueMZ(source = mzPeaks@mass[mzIndexes],
+                                 target = mzSpectrum@mass)
         mzPeakInfo <- fitpeaks(mzSpectrum@intensity, mzIndexes)
         
         # Eliminating peaks whose SNR is smaller than given threshold
@@ -330,9 +329,10 @@ plotSpectra <- function(spectraFileNames,
                 mzNoiseLevel <- estimateNoise(
                                     createMassSpectrum(massList, intensityList), 
                                     method = 'SuperSmoother')
-                mzMasks <- selectUniqueMZ(massList, peakList@mass)
+                mzIndexes <- mapUniqueMZ(source = peakList@mass, 
+                                         target = massList)
                 peakFilter <- peakList@intensity > 
-                                    mzNoiseLevel[mzMasks, 2] * peakSNR
+                                    mzNoiseLevel[mzIndexes, 2] * peakSNR
                 peakFilter[is.na(peakFilter)] <- FALSE
                 peakList <- createMassPeaks(peakFile[peakFilter, 1], 
                                             peakFile[peakFilter, 4])
