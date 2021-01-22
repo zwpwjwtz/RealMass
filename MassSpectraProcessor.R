@@ -63,7 +63,8 @@ processMassSpectra <- function(sourceFiles,
         }
     }
     
-    # Smooth spectra
+    ### BEGIN PROCESSING ###
+    # Step 1: Smooth spectra
     if (smoothing)
     {
         mzSpectra <- smoothIntensity(mzSpectra)
@@ -71,7 +72,7 @@ processMassSpectra <- function(sourceFiles,
             bgSpectra <- smoothIntensity(bgSpectra)
     }
     
-    # Baseline correction
+    # Step 2: Baseline correction
     if (baseline)
     {
         mzSpectra <- removeBaseline(mzSpectra)
@@ -79,7 +80,7 @@ processMassSpectra <- function(sourceFiles,
             bgSpectra <- removeBaseline(bgSpectra)
     }
     
-    # Align source spectra with reference peaks
+    # Step 3: Align source spectra with reference peaks
     # If no reference peak lis is provided, use peaks found in background
     mzPeaks <- detectPeaks(mzSpectra, SNR = 3)
     if (length(refPeakList) > 1)
@@ -126,7 +127,7 @@ processMassSpectra <- function(sourceFiles,
         }
     }
     
-    # Substract background intensity from source spectra
+    # Step 4: Substract background intensity from source spectra
     if (length(bgSpectra) > 0)
     {
         # Calculate an average background spectrum
@@ -139,6 +140,7 @@ processMassSpectra <- function(sourceFiles,
             intensity(mzSpectra[[i]]) <- mzIntensity
         }
     }
+    ### END PROCESSING ###
     
     # Write result to target file
     # Convert MALDIquant:MassSpectrum object back to data.frame 
@@ -185,6 +187,8 @@ pickPeaks <- function(sourceFiles,
             mzIndexes <- seq(1, length(mzPeaks@mass))
         mzIndexes <- mapUniqueMZ(source = mzPeaks@mass[mzIndexes],
                                  target = mzSpectrum@mass)
+        mzIndexes <- mzIndexes[mzIndexes > 1 & 
+                               mzIndexes < length(mzSpectrum@mass)]
         mzPeakInfo <- fitpeaks(mzSpectrum@intensity, mzIndexes)
         
         # Eliminating peaks whose SNR is smaller than given threshold
