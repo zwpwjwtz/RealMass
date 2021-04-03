@@ -103,3 +103,65 @@ selectUniqueMZ <- function(source, expected,
     mzMasks[unlist(mzIndexes)] <- TRUE
     return(mzMasks)
 }
+
+clusterMZ <- function(mzList, tolerance = 1e-3, relativeTolerance = TRUE)
+{
+    if (length(mzList) < 1)
+        return(c())
+    if (length(mzList) == 1)
+        return(list(seq(1, length(unlist(mzList)))))
+    
+    mzCluster <- mzList[[1]]
+    mzIndexList <- list(seq(1, length(mzList[[1]])))
+    for (i in seq(2, length(mzList)))
+    {
+        mzIndex <- mapUniqueMZ(mzList[[i]], mzCluster,
+                               tolerance = tolerance, 
+                               relativeTolerance = relativeTolerance,
+                               noMatchAsNA = TRUE)
+        unmappedIndex <- which(is.na(mzIndex))
+        if (length(unmappedIndex) > 0)
+        {
+            mzCluster <- c(mzCluster, mzList[[i]][unmappedIndex])
+            mzIndex[unmappedIndex] <- 
+                            seq(length(mzCluster) - length(unmappedIndex) + 1, 
+                                length(mzCluster))
+        }
+        mzIndexList <- c(mzIndexList, list(mzIndex))
+    }
+    return(mzIndexList)
+}
+
+averageMZ <- function(mzList, tolerance = 1e-3, relativeTolerance = TRUE,
+                      minFrequency = 1, algorithm = mean)
+{
+    if (length(mzList) < 1)
+        return(c())
+    
+    # Cluster m/z and get index maps for all m/z vectors
+    clusterIndexList <- clusterMZ(mzList, tolerance, relativeTolerance)
+    
+    # Get all available cluster indexes
+    allIndexes <- unique(unlist(clusterIndexList))
+    
+    # Apply the statistical algorithm on each cluster
+    averagedMZ <- lapply(allIndexes,
+                         data = mzList,
+                         indexList = clusterIndexList,
+                         threshold = minFrequency,
+                         algorithm = algorithm,
+                         function(X, data, indexList, threshold, algorithm)
+                         {
+                             cluster <- c()
+                             for (i in seq(1, length(indexList)))
+                             {
+                                 cluster <- c(cluster, 
+                                              data[[i]][indexList[[i]] == X])
+                             }
+                             if (length(cluster)/length(data) >= threshold)
+                                 return(algorithm(cluster))
+                             else
+                                 return(NULL)
+                         })
+    return(unlist(averagedMZ))
+}
