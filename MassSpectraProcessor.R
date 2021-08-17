@@ -160,10 +160,12 @@ processMassSpectra <- function(sourceFiles,
 # mzRanges: a list of m/z ranges to consider with; a empty list 
 #           will lead to processing of full spectra
 # peakSNR: a signal-to-noise ratio used to filter peaks
+# maxPeakWidth: the moving window size (absolute m/z) when fitting a peak
 pickPeaks <- function(sourceFiles,
                       targetFiles, 
                       mzRanges = list(),
-                      peakSNR = 6)
+                      peakSNR = 6,
+                      maxPeakWidth = 1)
 {
     for (i in seq(1, length(sourceFiles)))
     {
@@ -177,7 +179,13 @@ pickPeaks <- function(sourceFiles,
             mzSpectrum <- createMassSpectrum(mzSpectrum[,1], mzSpectrum[,2])
         
         # Pick peaks with given signal-to-noise ratio
-        mzPeaks <- detectPeaks(mzSpectrum, SNR = peakSNR)
+        mzWindowSize <- round(length(mzSpectrum@mass) * maxPeakWidth / 
+                              (max(mzSpectrum@mass) - min(mzSpectrum@mass)))
+        mzWindowSize <- max(mzWindowSize, 10)
+                        
+        mzPeaks <- detectPeaks(mzSpectrum, 
+                               halfWindowSize = mzWindowSize,
+                               SNR = peakSNR)
         
         # Fit found peaks and get relative peak information
         # Only peaks within the given m/z range are choosen
@@ -196,10 +204,14 @@ pickPeaks <- function(sourceFiles,
         # Assuming the first column is a list of m/z, 
         # and the fourth column is a list of intensities
         mzPeakInfoColNames <- colnames(mzPeakInfo)
-        mzPeakNoises <- estimateNoise(mzSpectrum, 
-                                      method = 'SuperSmoother')[mzPeakInfo[,1],2]
-        mzPeakInfo <- mzPeakInfo[!is.na(mzPeakInfo[,1]) & 
-                                     mzPeakInfo[,4] >= mzPeakNoises * peakSNR,]
+        mzPeakMasks <- !is.na(mzPeakInfo[,1])
+        mzIndexes <- mzPeakInfo[mzPeakMasks, 1]
+        mzNoises <- 
+            estimateNoise(mzSpectrum, method = 'SuperSmoother',
+                          span = mzWindowSize * 10 / length(mzSpectrum@mass))
+        mzPeakInfo <- 
+            mzPeakInfo[mzPeakMasks &
+                       mzPeakInfo[,4] >= mzNoises[mzIndexes, 2] * peakSNR,]
         
         # Ugly hack: correct dimension of mzPeakInfo and restore column names
         # when mzPeakInfo contains only one entry (i.e. one peak found)
@@ -240,16 +252,19 @@ pickPeaks <- function(sourceFiles,
 # intensityRange: a range of intensity used as the boundary of y axis
 # peakSNR: a signal-to-noise ratio used for filtering when labelling peaks
 #          a value less or equal to 0 will lead all peaks to be labelled
+# maxPeakWidth: the moving window size (absolute m/z) when fitting a peak
+# labelSize: size of the annotation text over peaks
 # resolution: image resolution (width and height)
 plotSpectra <- function(spectraFileNames, 
                         peakFileNames = c(),
                         plotFileNames = c(),
                         removeMonoisotopic = FALSE,
                         titles = c(),
-                        mzRange = c(-Inf, Inf),
+                        mzRange = c(NA, NA),
                         mzTick = 0,
                         intensityRange = c(),
                         peakSNR = 0,
+                        maxPeakWidth = 1,
                         labelSize = 1,
                         resolution = c(2000, 1000))
 {
@@ -276,21 +291,21 @@ plotSpectra <- function(spectraFileNames,
             intensityList <- mzSpectrum[,2]
         }
         
-        # Deal with inifite values in plot range of m/z (x axis)
-        if (mzRange[1] == -Inf)
-            plotMZMin <- round(min(massList), -log10(mzTick))
+        # Deal with NA values in plot range of m/z (x axis)
+        if (is.na(mzRange[1]))
+            plotMZMin <- round(min(massList), max(-log10(mzTick), 1E-6))
         else
             plotMZMin <- mzRange[1]
-        if (mzRange[2] == Inf)
-            plotMZMax <- round(max(massList), -log10(mzTick))
+        if (is.na(mzRange[2]))
+            plotMZMax <- round(max(massList), max(-log10(mzTick), 1E-6))
         else
             plotMZMax <- mzRange[2]
         
         # Calculate label interval for m/z (x axis) if necessary
         if (mzTick <= 0)
         {
-            plotMZScale <- pretty(massList[massList > plotMZMin & 
-                                           massList < plotMZMax])
+            plotMZScale <- pretty(massList[massList >= plotMZMin & 
+                                           massList <= plotMZMax])
             mzTick <- plotMZScale[2] - plotMZScale[1]
         }
         
@@ -330,9 +345,12 @@ plotSpectra <- function(spectraFileNames,
             # Filter peaks with given SNR
             if (peakSNR > 0)
             {
+                mzWindowSize <- max(round(length(massList) * maxPeakWidth / 
+                                          (max(massList) - min(massList))), 10)
                 mzNoiseLevel <- estimateNoise(
                                     createMassSpectrum(massList, intensityList), 
-                                    method = 'SuperSmoother')
+                                    method = 'SuperSmoother',
+                                    span = mzWindowSize * 10 / length(massList))
                 mzIndexes <- mapUniqueMZ(source = peakList@mass, 
                                          target = massList)
                 peakFilter <- peakList@intensity > 
