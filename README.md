@@ -12,3 +12,4 @@ No guarantee for data safety. Back up your data before using!
 
 - TXT (CSV)
 - mzXML
+- mzML

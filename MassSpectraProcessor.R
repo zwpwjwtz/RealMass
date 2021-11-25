@@ -206,9 +206,10 @@ pickPeaks <- function(sourceFiles,
         mzPeakInfoColNames <- colnames(mzPeakInfo)
         mzPeakMasks <- !is.na(mzPeakInfo[,1])
         mzIndexes <- mzPeakInfo[mzPeakMasks, 1]
+        mzNoiseWindowSize <- min(mzWindowSize * 10 / length(mzSpectrum@mass), 1)
         mzNoises <- 
             estimateNoise(mzSpectrum, method = 'SuperSmoother',
-                          span = mzWindowSize * 10 / length(mzSpectrum@mass))
+                          span = mzNoiseWindowSize)
         mzPeakInfo <- 
             mzPeakInfo[mzPeakMasks &
                        mzPeakInfo[,4] >= mzNoises[mzIndexes, 2] * peakSNR,]
@@ -347,10 +348,12 @@ plotSpectra <- function(spectraFileNames,
             {
                 mzWindowSize <- max(round(length(massList) * maxPeakWidth / 
                                           (max(massList) - min(massList))), 10)
+                mzNoiseWindowSize <- min(mzWindowSize * 10 / length(massList), 
+                                         1)
                 mzNoiseLevel <- estimateNoise(
                                     createMassSpectrum(massList, intensityList), 
                                     method = 'SuperSmoother',
-                                    span = mzWindowSize * 10 / length(massList))
+                                    span = mzNoiseWindowSize)
                 mzIndexes <- mapUniqueMZ(source = peakList@mass, 
                                          target = massList)
                 peakFilter <- peakList@intensity > 
