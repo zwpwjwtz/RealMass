@@ -167,7 +167,7 @@ pickPeaks <- function(sourceFiles,
                       peakSNR = 6,
                       maxPeakWidth = 1)
 {
-    for (i in seq(1, length(sourceFiles)))
+    sapply(seq(1, length(sourceFiles)), function(i)
     {
         # Read source spectrum
         mzSpectrum <- readRDS(sourceFiles[i])
@@ -236,7 +236,7 @@ pickPeaks <- function(sourceFiles,
         
         # Save peaks information
         write.csv(mzPeakInfo, targetFiles[i], row.names = FALSE)
-    }
+    })
 }
 
 
@@ -274,7 +274,7 @@ plotSpectra <- function(spectraFileNames,
     if (length(titles) < length(plotFileNames))
         titles <- c(titles, rep('', length(plotFileNames) - length(titles)))
     
-    for (i in seq(1, length(spectraFileNames)))
+    sapply(seq(1, length(spectraFileNames)), function(i)
     {
         mzSpectrum <- readRDS(spectraFileNames[i])
         
@@ -375,7 +375,7 @@ plotSpectra <- function(spectraFileNames,
                 height = resolution[2],
                 res = 100)
         plot(massList, intensityList, 
-             type = 'h', xaxt = 'n', xaxs='i',
+             type = 'h', xaxt = 'n', xaxs = 'i',
              xlim = c(plotMZMin, plotMZMax),
              ylim = c(plotIntMin, plotIntMax),
              xlab = expression(italic('m/z')),
@@ -386,5 +386,5 @@ plotSpectra <- function(spectraFileNames,
         title(titles[i])
         if (saveToFile)
             dev.off()
-    }
+    })
 }
