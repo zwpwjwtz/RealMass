@@ -2,6 +2,7 @@
 # picking peaks and plotting spectrum & peaks
 # Using functions provided by MALDIquant and alsace package
 
+library('parallel')
 library('MALDIquant')
 library('alsace')
 source('./MSFileIO.R')
@@ -167,7 +168,13 @@ pickPeaks <- function(sourceFiles,
                       peakSNR = 6,
                       maxPeakWidth = 1)
 {
-    sapply(seq(1, length(sourceFiles)), function(i)
+    threads <- makeCluster(detectCores())
+    clusterExport(cl = threads, 
+                  c('inverseRangeIndex', 'rangeFilter.index', 'mapUniqueMZ'))
+    clusterExport(cl = threads, envir = environment(), 
+                  c('sourceFiles', 'targetFiles', 
+                    'mzRanges', 'peakSNR', 'maxPeakWidth'))
+    parSapply(threads, seq(1, length(sourceFiles)), function(i)
     {
         # Read source spectrum
         mzSpectrum <- readRDS(sourceFiles[i])
@@ -176,16 +183,17 @@ pickPeaks <- function(sourceFiles,
         # If the source object is a data frame (with at least two columns), 
         # convert it to a MALDIquant::MassSpectrum object
         if (!is.null(nrow(mzSpectrum)) && nrow(mzSpectrum) >= 2)
-            mzSpectrum <- createMassSpectrum(mzSpectrum[,1], mzSpectrum[,2])
+            mzSpectrum <- MALDIquant::createMassSpectrum(mzSpectrum[,1], 
+                                                         mzSpectrum[,2])
         
         # Pick peaks with given signal-to-noise ratio
         mzWindowSize <- round(length(mzSpectrum@mass) * maxPeakWidth / 
                               (max(mzSpectrum@mass) - min(mzSpectrum@mass)))
         mzWindowSize <- max(mzWindowSize, 10)
                         
-        mzPeaks <- detectPeaks(mzSpectrum, 
-                               halfWindowSize = mzWindowSize,
-                               SNR = peakSNR)
+        mzPeaks <- MALDIquant::detectPeaks(mzSpectrum, 
+                                           halfWindowSize = mzWindowSize,
+                                           SNR = peakSNR)
         
         # Fit found peaks and get relative peak information
         # Only peaks within the given m/z range are choosen
@@ -197,7 +205,7 @@ pickPeaks <- function(sourceFiles,
                                  target = mzSpectrum@mass)
         mzIndexes <- mzIndexes[mzIndexes > 1 & 
                                mzIndexes < length(mzSpectrum@mass)]
-        mzPeakInfo <- fitpeaks(mzSpectrum@intensity, mzIndexes)
+        mzPeakInfo <- alsace::fitpeaks(mzSpectrum@intensity, mzIndexes)
         
         # Eliminating peaks whose SNR is smaller than given threshold
         # Remove also lines with NA
@@ -208,8 +216,8 @@ pickPeaks <- function(sourceFiles,
         mzIndexes <- mzPeakInfo[mzPeakMasks, 1]
         mzNoiseWindowSize <- min(mzWindowSize * 10 / length(mzSpectrum@mass), 1)
         mzNoises <- 
-            estimateNoise(mzSpectrum, method = 'SuperSmoother',
-                          span = mzNoiseWindowSize)
+            MALDIquant::estimateNoise(mzSpectrum, method = 'SuperSmoother',
+                                      span = mzNoiseWindowSize)
         mzPeakInfo <- 
             mzPeakInfo[mzPeakMasks &
                        mzPeakInfo[,4] >= mzNoises[mzIndexes, 2] * peakSNR,]
@@ -237,6 +245,7 @@ pickPeaks <- function(sourceFiles,
         # Save peaks information
         write.csv(mzPeakInfo, targetFiles[i], row.names = FALSE)
     })
+    stopCluster(threads)
 }
 
 
@@ -274,7 +283,15 @@ plotSpectra <- function(spectraFileNames,
     if (length(titles) < length(plotFileNames))
         titles <- c(titles, rep('', length(plotFileNames) - length(titles)))
     
-    sapply(seq(1, length(spectraFileNames)), function(i)
+    threads <- makeCluster(detectCores())
+    clusterExport(cl = threads, 
+                  c('inverseRangeIndex', 'rangeFilter.index', 'mapUniqueMZ'))
+    clusterExport(cl = threads, envir = environment(), 
+                  c('spectraFileNames', 'peakFileNames', 'plotFileNames', 
+                    'removeMonoisotopic', 'titles', 'mzRange', 'mzTick', 
+                    'intensityRange', 'peakSNR', 'maxPeakWidth',
+                    'labelSize', 'resolution'))
+    parSapply(threads, seq(1, length(spectraFileNames)), function(i)
     {
         mzSpectrum <- readRDS(spectraFileNames[i])
         
@@ -335,13 +352,11 @@ plotSpectra <- function(spectraFileNames,
             # Assuming the first column is a list of m/z,
             # and the fourth column is a list of peak intensities
             peakFile <- read.csv(peakFileNames[i], as.is = TRUE)
-            peakList <- createMassPeaks(peakFile[,1], peakFile[,4])
+            peakList <- MALDIquant::createMassPeaks(peakFile[,1], peakFile[,4])
             
             # Remove monoisotopic peaks if necessary
             if (removeMonoisotopic)
-            {
-                peakList <- monoisotopicPeaks(peakList)
-            }
+                peakList <- MALDIquant::monoisotopicPeaks(peakList)
             
             # Filter peaks with given SNR
             if (peakSNR > 0)
@@ -350,17 +365,18 @@ plotSpectra <- function(spectraFileNames,
                                           (max(massList) - min(massList))), 10)
                 mzNoiseWindowSize <- min(mzWindowSize * 10 / length(massList), 
                                          1)
-                mzNoiseLevel <- estimateNoise(
-                                    createMassSpectrum(massList, intensityList), 
-                                    method = 'SuperSmoother',
-                                    span = mzNoiseWindowSize)
+                mzNoiseLevel <- 
+                    MALDIquant::estimateNoise(
+                        MALDIquant::createMassSpectrum(massList, intensityList), 
+                        method = 'SuperSmoother',
+                        span = mzNoiseWindowSize)
                 mzIndexes <- mapUniqueMZ(source = peakList@mass, 
                                          target = massList)
                 peakFilter <- peakList@intensity > 
                                     mzNoiseLevel[mzIndexes, 2] * peakSNR
                 peakFilter[is.na(peakFilter)] <- FALSE
-                peakList <- createMassPeaks(peakFile[peakFilter, 1], 
-                                            peakFile[peakFilter, 4])
+                peakList <- MALDIquant::createMassPeaks(peakFile[peakFilter, 1],
+                                                        peakFile[peakFilter, 4])
             }
         }
         
@@ -382,9 +398,10 @@ plotSpectra <- function(spectraFileNames,
              ylab = 'Intensity')
         axis(1, at = seq(plotMZMin, plotMZMax, mzTick))
         if (!is.null(peakList) && length(peakList@mass) > 0)
-            labelPeaks(peakList, cex = labelSize)
+            MALDIquant::labelPeaks(peakList, cex = labelSize)
         title(titles[i])
         if (saveToFile)
             dev.off()
     })
+    stopCluster(threads)
 }
