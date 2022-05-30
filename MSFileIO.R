@@ -3,6 +3,7 @@
 
 # Required libraries:
 # mzR
+# readBrukerFlexData
 
 # Utility functions
 requirePackage <- function(name)
@@ -239,6 +240,23 @@ updateMZMLSpectra <- function(spectrumList, fileName)
                          outformat = 'mzML')
 }
 
+# Handlers for the "fid spectrum (Bruker)"
+readBrukerFlexSpectrum <- function(filename)
+{
+    requirePackage('readBrukerFlexData')
+    
+    mzFile <- readBrukerFlexData::readBrukerFlexFile(filename)
+    if (length(mzFile) > 0 && mzFile$spectrum$tof == mzFile$spectrum$mass)
+    {
+        # Failed converting from ToF to m/z; the m/z in the list is not valid
+        return(NULL)
+    }
+    
+    mzData <- cbind(mzFile$spectrum$mass, mzFile$spectrum$intensity)
+    colnames(mzData) <- c('m/z', 'Intensity')
+    return(mzData)
+}
+
 # Read one spectrum from a data file by guessing its format
 readSpectrum <- function(fileName)
 {
@@ -251,8 +269,10 @@ readSpectrum <- function(fileName)
 	    spectrumList <- readTxtSpectrum(fileName, fieldSeparator = ',')
 	else if (endsWith(tolower(fileName), '.mzxml'))
 	    spectrumList <- readMZXMLSpectra(fileName)
-    else if (endsWith(tolower(fileName), '.mzml'))
-        spectrumList <- readMZMLSpectra(fileName)
+	else if (endsWith(tolower(fileName), '.mzml'))
+	    spectrumList <- readMZMLSpectra(fileName)
+	else if (any(endsWith(tolower(fileName), c('/fid', '\fid'))))
+	    spectrumList <- readBrukerFlexSpectrum(fileName)
 	else if (endsWith(tolower(fileName), '.rds'))
 	    spectrumList <- readRDS(fileName)
 	else
@@ -278,6 +298,8 @@ readSpectra <- function(fileName)
         return(readMZXMLSpectra(fileName))
     else if (endsWith(tolower(fileName), '.mzml'))
         return(readMZMLSpectra(fileName))
+    else if (any(endsWith(tolower(fileName), c('/fid', '\fid'))))
+        return(list(readBrukerFlexSpectrum(fileName)))
     else if (endsWith(tolower(fileName), '.rds'))
         return(readRDS(fileName))
     else
